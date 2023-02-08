@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="mint_50">#e0f3ef</color>
+    <color name="mint_500">#009a7b</color>
+    <color name="mint_700">#007d5f</color>
+    <color name="mint_900">#005136</color>
+    <color name="red_50">#fae9ed</color>
+    <color name="red_500">#d72a38</color>
+    <color name="red_700">#b71730</color>
+    <color name="red_900">#9a001f</color>
+    <color name="blue_50">#e0f3f8</color>
+    <color name="blue_500">#169ccd</color>
+    <color name="blue_700">#007dae</color>
+    <color name="blue_900">#004d79</color>
+    <color name="violet_50">#f3e4f4</color>
+    <color name="violet_500">#9c06a7</color>
+    <color name="violet_700">#7c009a</color>
+    <color name="violet_900">#4b0087</color>
+    <color name="white">#ffffff</color>
+    <color name="black">#000000</color>
+
+</resources>

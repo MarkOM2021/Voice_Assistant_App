@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Голосовой поиск</string>
+    <string name="action_stop">Остановить</string>
+    <string name="action_clear">Очистить</string>
+    <string name="request_hint">Что Вы ищете?</string>
+    <string name="error_do_not_understand">Простите, не могу разобрать. Можете повторить?</string>
+    <string name="error_voice_recognition_unavailable">Распознавание голоса недоступно</string>
+    <string name="error_something_went_wrong">Ой, что-то пошло не так…</string>
+    <string name="error_tts_is_not_ready">TTS недоступен</string>
+</resources>
