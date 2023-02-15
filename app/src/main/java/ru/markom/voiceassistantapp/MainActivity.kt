@@ -1,16 +1,27 @@
 package ru.markom.voiceassistantapp
 
+import android.app.ProgressDialog.show
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
+import android.view.View
+import android.view.inputmethod.EditorInfo
 import android.widget.ListView
 import android.widget.ProgressBar
 import android.widget.SimpleAdapter
+import androidx.core.view.accessibility.AccessibilityEventCompat.setAction
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.floatingactionbutton.FloatingActionButton
+import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.textfield.TextInputEditText
+import com.wolfram.alpha.WAEngine
+import com.wolfram.alpha.WAPlainText
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : AppCompatActivity() {
 
@@ -22,30 +33,16 @@ class MainActivity : AppCompatActivity() {
 
     lateinit var progressBar: ProgressBar
 
-    val pods= mutableListOf<HashMap<String, String>>(
-        HashMap<String, String>().apply{
-            put("title", "title1")
-            put("content", "content1")
-        },
-        HashMap<String, String>().apply{
-            put("title", "title2")
-            put("content", "content2")
-        },
-        HashMap<String, String>().apply{
-            put("title", "title3")
-            put("content", "content3")
-        },
-        HashMap<String, String>().apply{
-            put("title", "title4")
-            put("content", "content4")
-        }
-    )
+    lateinit var waEngine: WAEngine
+
+    val pods = mutableListOf<HashMap<String, String>>()
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         initView()
+        initWAEngine()
     }
 
     fun initView() {
@@ -53,6 +50,16 @@ class MainActivity : AppCompatActivity() {
         setSupportActionBar(toolbar)
 
         requestInput = findViewById(R.id.text_input_edit)
+        requestInput.setOnEditorActionListener { v, actionId, event ->
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                pods.clear()
+                podsAdapter.notifyDataSetChanged()
+
+                val question = requestInput.text.toString()
+                askAssistant(question)
+            }
+            return@setOnEditorActionListener false
+        }
 
         val podsList: ListView = findViewById(R.id.pods_list)
         podsAdapter = SimpleAdapter(
@@ -60,13 +67,13 @@ class MainActivity : AppCompatActivity() {
             pods,
             R.layout.item_pod,
             arrayOf("title", "content"),
-            intArrayOf(R.id.title,R.id.content)
+            intArrayOf(R.id.title, R.id.content)
         )
         podsList.adapter = podsAdapter
 
         val voiceInputButton: FloatingActionButton = findViewById(R.id.voice_input_button)
-        voiceInputButton.setOnClickListener{
-            Log.d(tag,"Floating Action Button on click")
+        voiceInputButton.setOnClickListener {
+            Log.d(tag, "Floating Action Button on click")
         }
 
         progressBar = findViewById(R.id.progress_bar)
@@ -78,16 +85,82 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        when(item.itemId) {
-            R.id.action_stop-> {
+        when (item.itemId) {
+            R.id.action_stop -> {
                 Log.d(tag, "actions_stop")
                 return true
             }
-            R.id.action_clear-> {
-                Log.d(tag, "actions_clear")
+            R.id.action_clear -> {
+                requestInput.text?.clear()
+                pods.clear()
+                podsAdapter.notifyDataSetChanged()
                 return true
             }
         }
         return super.onOptionsItemSelected(item)
+    }
+
+    fun initWAEngine() {
+        waEngine = WAEngine().apply {
+            appID = "QY569Y-A87KPW3UAQ"
+            addFormat("plaintext")
+        }
+    }
+
+    fun showSnackbar(message: String) {
+        Snackbar.make(
+            findViewById(android.R.id.content),
+            message,
+            Snackbar.LENGTH_INDEFINITE
+        ).apply {
+            setAction(android.R.string.ok) {
+                dismiss()
+            }
+            show()
+        }
+    }
+
+    fun askAssistant(request: String) {
+        progressBar.visibility = View.VISIBLE
+        CoroutineScope(Dispatchers.IO).launch {
+            val query = waEngine.createQuery().apply {
+                input = request
+            }
+            kotlin.runCatching {
+                waEngine.performQuery(query)
+            }.onSuccess { result ->
+                withContext(Dispatchers.Main) {
+                    progressBar.visibility = View.GONE
+                    if (result.isError) {
+                        showSnackbar(result.errorMessage)
+                        return@withContext
+                    } else if (!result.isSuccess) {
+                        requestInput.error = getString(R.string.error_do_not_understand)
+                        return@withContext
+                    } else {
+                        for (pod in result.pods) {
+                            if (pod.isError) continue
+                            val content = StringBuilder()
+                            for (element in pod.subpods) {
+                                if (element is WAPlainText) {
+                                    content.append(element.text)
+                                }
+                            }
+                            pods.add(0, HashMap<String, String>().apply {
+                                put("Title", pod.title)
+                                put("Content", content.toString())
+                            })
+                        }
+                        podsAdapter.notifyDataSetChanged()
+                    }
+                }
+            }.onFailure { t ->
+                withContext(Dispatchers.Main) {
+                    progressBar.visibility = View.GONE
+                    showSnackbar(t.message ?: getString(R.string.error_something_went_wrong))
+                }
+            }
+
+        }
     }
 }
