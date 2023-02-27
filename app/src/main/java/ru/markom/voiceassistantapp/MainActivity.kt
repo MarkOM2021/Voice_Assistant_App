@@ -1,6 +1,5 @@
 package ru.markom.voiceassistantapp
 
-import android.app.ProgressDialog.show
 import android.content.Intent
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
@@ -14,7 +13,6 @@ import android.view.inputmethod.EditorInfo
 import android.widget.ListView
 import android.widget.ProgressBar
 import android.widget.SimpleAdapter
-import androidx.core.view.accessibility.AccessibilityEventCompat.setAction
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.snackbar.Snackbar
@@ -30,7 +28,7 @@ import kotlin.collections.HashMap
 
 class MainActivity : AppCompatActivity() {
 
-    val tag = "MainActivity"
+    private val tag = "MainActivity"
 
     lateinit var requestInput: TextInputEditText
 
@@ -40,13 +38,13 @@ class MainActivity : AppCompatActivity() {
 
     lateinit var waEngine: WAEngine
 
-    val pods = mutableListOf<HashMap<String, String>>()
+    private val pods = mutableListOf<HashMap<String, String>>()
 
     lateinit var textToSpeech: TextToSpeech
 
-    var isTtsready = false
+    private var isTtsReady = false
 
-    val VOICE_RECOGNITION_REQUEST_CODE = 11111
+    private val VOICE_RECOGNITION_REQUEST_CODE = 11111
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,18 +55,18 @@ class MainActivity : AppCompatActivity() {
         initTts()
     }
 
-    fun initView() {
+    private fun initView() {
         val toolbar: MaterialToolbar = findViewById(R.id.toolbar)
         setSupportActionBar(toolbar)
 
         requestInput = findViewById(R.id.text_input_edit)
-        requestInput.setOnEditorActionListener { v, actionId, event ->
+        requestInput.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_DONE) {
                 pods.clear()
                 podsAdapter.notifyDataSetChanged()
 
                 val question = requestInput.text.toString()
-                askAssistant(question)
+                askWolfram(question)
             }
             return@setOnEditorActionListener false
         }
@@ -78,60 +76,33 @@ class MainActivity : AppCompatActivity() {
             applicationContext,
             pods,
             R.layout.item_pod,
-            arrayOf("title", "content"),
+            arrayOf("Title", "Content"),
             intArrayOf(R.id.title, R.id.content)
         )
         podsList.adapter = podsAdapter
-        podsList.setOnItemClickListener { parent, view, position, id ->
-            if (isTtsready) {
-                val title = pods[position]["Title"]
-                val content = pods[position]["Content"]
-                textToSpeech.speak(content, TextToSpeech.QUEUE_FLUSH, null, title)
-            }
+        podsList.setOnItemClickListener { _, _, position, _ ->
+            val title = pods[position]["Title"]
+            val content = pods[position]["Content"]
+            textToSpeech.speak(content, TextToSpeech.QUEUE_FLUSH, null, title)
         }
 
         val voiceInputButton: FloatingActionButton = findViewById(R.id.voice_input_button)
         voiceInputButton.setOnClickListener {
             pods.clear()
             podsAdapter.notifyDataSetChanged()
-
-            if(isTtsready) {
+            if (isTtsReady) {
                 textToSpeech.stop()
             }
             showVoiceInputDialog()
         }
-
         progressBar = findViewById(R.id.progress_bar)
     }
 
-    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
-        menuInflater.inflate(R.menu.toolbar_menu, menu)
-        return super.onCreateOptionsMenu(menu)
-    }
-
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        when (item.itemId) {
-            R.id.action_stop -> {
-                if (isTtsready) {
-                    textToSpeech.stop()
-                }
-                return true
-            }
-            R.id.action_clear -> {
-                requestInput.text?.clear()
-                pods.clear()
-                podsAdapter.notifyDataSetChanged()
-                return true
-            }
-        }
-        return super.onOptionsItemSelected(item)
-    }
 
     fun initWAEngine() {
-        waEngine = WAEngine().apply {
-            appID = "QY569Y-A87KPW3UAQ"
-            addFormat("plaintext")
-        }
+        waEngine = WAEngine()
+        waEngine.appID = "QY569Y-A87KPW3UAQ"
+        waEngine.addFormat("plaintext")
     }
 
     fun showSnackbar(message: String) {
@@ -147,13 +118,13 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    fun askAssistant(request: String) {
+    fun askWolfram(request: String) {
         progressBar.visibility = View.VISIBLE
         CoroutineScope(Dispatchers.IO).launch {
             val query = waEngine.createQuery().apply {
                 input = request
             }
-            kotlin.runCatching {
+            runCatching {
                 waEngine.performQuery(query)
             }.onSuccess { result ->
                 withContext(Dispatchers.Main) {
@@ -161,25 +132,28 @@ class MainActivity : AppCompatActivity() {
                     if (result.isError) {
                         showSnackbar(result.errorMessage)
                         return@withContext
-                    } else if (!result.isSuccess) {
+                    }
+                    if (!result.isSuccess) {
                         requestInput.error = getString(R.string.error_do_not_understand)
                         return@withContext
-                    } else {
-                        for (pod in result.pods) {
-                            if (pod.isError) continue
-                            val content = StringBuilder()
-                            for (element in pod.subpods) {
-                                if (element is WAPlainText) {
-                                    content.append(element.text)
-                                }
-                            }
-                            pods.add(0, HashMap<String, String>().apply {
-                                put("Title", pod.title)
-                                put("Content", content.toString())
-                            })
-                        }
-                        podsAdapter.notifyDataSetChanged()
                     }
+                    for (pod in result.pods) {
+                        if (!pod.isError) {
+                            val content = StringBuilder()
+                            for (subPod in pod.subpods) {
+                                for (element in subPod.contents) {
+                                    if (element is WAPlainText) {
+                                        content.append(element.text)
+                                    }
+                                }
+                                pods.add(0, HashMap<String, String>().apply {
+                                    put("Title", pod.title)
+                                    put("Content", content.toString())
+                                })
+                            }
+                        }
+                    }
+                    podsAdapter.notifyDataSetChanged()
                 }
             }.onFailure { t ->
                 withContext(Dispatchers.Main) {
@@ -197,13 +171,13 @@ class MainActivity : AppCompatActivity() {
                 Log.e(tag, "TTS error $code")
                 showSnackbar(getString(R.string.error_tts_is_not_ready))
             } else {
-                isTtsready = true
+                isTtsReady = true
             }
         }
         textToSpeech.language = Locale.US
     }
 
-    fun showVoiceInputDialog() {
+    private fun showVoiceInputDialog() {
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(
                 RecognizerIntent.EXTRA_LANGUAGE_MODEL,
@@ -225,10 +199,33 @@ class MainActivity : AppCompatActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == VOICE_RECOGNITION_REQUEST_CODE && resultCode == RESULT_OK) {
-            data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.get(0)?.let {question ->
+            data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.get(0)?.let { question ->
                 requestInput.setText(question)
-                askAssistant(question)
+                askWolfram(question)
             }
         }
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+        menuInflater.inflate(R.menu.toolbar_menu, menu)
+        return super.onCreateOptionsMenu(menu)
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        when (item.itemId) {
+            R.id.action_stop -> {
+                if (isTtsReady) {
+                    textToSpeech.stop()
+                }
+                return true
+            }
+            R.id.action_clear -> {
+                requestInput.text?.clear()
+                pods.clear()
+                podsAdapter.notifyDataSetChanged()
+                return true
+            }
+        }
+        return super.onOptionsItemSelected(item)
     }
 }
